@@ -5,6 +5,26 @@ from torchvision import models, transforms
 from PIL import Image
 import io
 import json
+import google.generativeai as genai
+
+
+def generate_caption_with_gemini_text(top_labels_with_probs):
+
+    prompt_text = f"The image contains the following identified objects and features with associated likelihood: {', '.join([f'{label} ({prob:.2f})' for label, prob in top_labels_with_probs[:30]])}. Please generate an artistic caption about the image to be put on instagram, just one."
+
+    try:
+        response = model_txt.generate_content(prompt_text)
+        response.resolve()
+        if response.text:
+            return response.text
+        else:
+            print("No text generated in the response.")
+            return None
+    except Exception as e:
+        print(f"Error generating caption with Gemini Pro: {e}")
+        return None
+
+
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -12,6 +32,11 @@ app = FastAPI()
 # Load the pre-trained ResNet-18 model
 model = models.resnet50(pretrained=True)
 model.eval()  # Set the model to evaluation mode
+
+genai.configure(api_key="xxxxxxx")  # Replace with your actual API key
+
+# Use the Gemini Pro model (text-only)
+model_txt = genai.GenerativeModel('gemini-2.0-flash')
 
 # Define the image transformations for preprocessing
 preprocess = transforms.Compose([
@@ -50,8 +75,12 @@ async def predict(file: UploadFile = File(...)):
 
         # Prepare the result as a list of (class_name, confidence_score)
         predictions = [{"label": label, "confidence": round(prob, 4)} for label, prob in zip(top_classes, top_probs)]
-        print(predictions)
-        return JSONResponse(content={"predictions": predictions})
+        predi = [(label,round(prob,4)) for label, prob in zip(top_classes, top_probs)]
+        #print(predi)
+        generated_caption = generate_caption_with_gemini_text(predi)
+        #print(generated_caption)
+        #return JSONResponse(content={"predictions": predictions})
+        return JSONResponse(content={"predictions": predictions, "caption": generated_caption})
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
