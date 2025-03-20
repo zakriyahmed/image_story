@@ -1,4 +1,7 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, Response, Form
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi.responses import JSONResponse
 import torch
 from torchvision import models, transforms
@@ -8,9 +11,13 @@ import json
 import google.generativeai as genai
 
 
-def generate_caption_with_gemini_text(top_labels_with_probs):
-
-    prompt_text = f"The image contains the following identified objects and features with associated likelihood: {', '.join([f'{label} ({prob:.2f})' for label, prob in top_labels_with_probs[:30]])}. Please generate an artistic caption about the image to be put on instagram, just one."
+def generate_caption_with_gemini_text(top_labels_with_probs,tags=None):
+    if len(tags)<1:
+        user_tags=['None']
+    else:
+        user_tags = tags
+    
+    prompt_text = f"The image contains the following identified objects and features with associated likelihood using resnet50 model: {', '.join([f'{label} ({prob:.2f})' for label, prob in top_labels_with_probs[:30]])}. The user provided following tags as context to image {user_tags}. Please generate an artistic caption about the image to be put on instagram, just one."
 
     try:
         response = model_txt.generate_content(prompt_text)
@@ -29,11 +36,21 @@ def generate_caption_with_gemini_text(top_labels_with_probs):
 # Initialize FastAPI app
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Replace with specific origins in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Load the pre-trained ResNet-18 model
 model = models.resnet50(pretrained=True)
 model.eval()  # Set the model to evaluation mode
 
-genai.configure(api_key="xxxxxxx")  # Replace with your actual API key
+genai.configure(api_key="xxxxxxxx")  # Replace with your actual API key
 
 # Use the Gemini Pro model (text-only)
 model_txt = genai.GenerativeModel('gemini-2.0-flash')
@@ -53,10 +70,12 @@ label_table = {}
 for i in range(1000):
     label_table[i] = LABELS[f'{i}'][1]
 @app.post("/predict/")
-async def predict(file: UploadFile = File(...)):
+async def predict(file: UploadFile = File(...) , tags: str = Form(...)):
     try:
         # Read the image file as bytes
+        
         image_bytes = await file.read()
+        #print(image_bytes,tags,file)
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
         # Preprocess the image
@@ -76,14 +95,20 @@ async def predict(file: UploadFile = File(...)):
         # Prepare the result as a list of (class_name, confidence_score)
         predictions = [{"label": label, "confidence": round(prob, 4)} for label, prob in zip(top_classes, top_probs)]
         predi = [(label,round(prob,4)) for label, prob in zip(top_classes, top_probs)]
-        #print(predi)
-        generated_caption = generate_caption_with_gemini_text(predi)
-        #print(generated_caption)
+        if len(tags)<1:
+            tag_list = ['None']
+        else:
+            tag_list = tags
+        generated_caption = generate_caption_with_gemini_text(predi,tag_list)
         #return JSONResponse(content={"predictions": predictions})
         return JSONResponse(content={"predictions": predictions, "caption": generated_caption})
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.get("/")
+async def read_root():
+    return Response(open("./static/index.html", "r").read(), media_type="text/html")
 
 if __name__ == "__main__":
     import uvicorn

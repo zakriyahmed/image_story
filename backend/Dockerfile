@@ -2,7 +2,7 @@
 FROM python:3.9-slim
 
 # Set working directory to /app
-WORKDIR /app
+WORKDIR /backend
 
 # Install system dependencies required by PIL, OpenCV, and others
 RUN apt-get update && apt-get install -y \
@@ -17,9 +17,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install python-multipart
+RUN pip install google-generativeai
 
 # Copy the entire application code to the container
-COPY . /app
+COPY . /backend
 
 # Expose port 8099 for FastAPI server
 EXPOSE 8099

@@ -9,40 +9,6 @@ void main() {
   runApp(MyApp());
 }
 
-class ImageDisplay extends StatelessWidget {
-  final File imageFile;
-
-  const ImageDisplay({super.key, required this.imageFile});
-
-  @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-
-    // Define a maximum height for the image, e.g., 50% of the screen height
-    final maxImageHeight = screenHeight * 0.5;
-    // Or define a maximum width, or both
-    final maxImageWidth = screenWidth * 0.8;
-
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: maxImageWidth,
-          maxHeight: maxImageHeight,
-        ),
-        child: Image.file(
-          imageFile,
-          fit: BoxFit.contain, // Still use BoxFit to scale within the constraints
-          errorBuilder: (context, error, stackTrace) {
-            return const Text('Could not load image.');
-          },
-        ),
-      ),
-    );
-  }
-}
-
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -61,8 +27,10 @@ class _ImagePickerPageState extends State<ImagePickerPage>
     with SingleTickerProviderStateMixin {
   final picker = ImagePicker();
   File? _image;
-  Map<String, dynamic>? _predictionData; // Store the entire prediction data
+  Map<String, dynamic>? _predictionData;
   late TabController _tabController;
+  List<String> _tags = [];
+  final TextEditingController _tagController = TextEditingController();
 
   @override
   void initState() {
@@ -74,10 +42,10 @@ class _ImagePickerPageState extends State<ImagePickerPage>
   @override
   void dispose() {
     _tabController.dispose();
+    _tagController.dispose();
     super.dispose();
   }
 
-  // Check and request permissions
   Future<void> _checkPermissions() async {
     await [
       Permission.camera,
@@ -85,41 +53,40 @@ class _ImagePickerPageState extends State<ImagePickerPage>
     ].request();
   }
 
-  // Pick image from gallery or camera
   Future<void> _pickImage(ImageSource source) async {
     final pickedFile = await picker.pickImage(source: source);
 
     if (pickedFile != null) {
       setState(() {
         _image = File(pickedFile.path);
-        _predictionData = null; // Clear previous results
+        _predictionData = null;
       });
-
-      _classifyImage(_image!);
     } else {
       print("No image selected.");
     }
   }
 
-  // Send image to server and get classification result
-  Future<void> _classifyImage(File image) async {
-    final uri = Uri.parse('http://10.0.2.2:8099/predict/'); // Update with your server IP
+  Future<void> _classifyImage() async {
+    if (_image == null) return;
+
+    final uri = Uri.parse('http://10.0.2.2:8099/predict/'); // Replace with your server IP
 
     var request = http.MultipartRequest('POST', uri);
-    request.files.add(await http.MultipartFile.fromPath('file', image.path));
+    request.files.add(await http.MultipartFile.fromPath('file', _image!.path));
+    request.fields['tags'] = jsonEncode(_tags);
 
     var response = await request.send();
     var responseBody = await response.stream.bytesToString();
 
-    print("Raw Response from server: $responseBody"); // Debugging
+    print("Raw Response from server: $responseBody");
 
     if (response.statusCode == 200) {
       try {
-        Map<String, dynamic> data = jsonDecode(responseBody); // Decode as a Map
-        print("Parsed Response: $data"); // Debugging
+        Map<String, dynamic> data = jsonDecode(responseBody);
+        print("Parsed Response: $data");
 
         setState(() {
-          _predictionData = data; // Store the entire response data
+          _predictionData = data;
         });
       } catch (e) {
         print("Error parsing JSON: $e");
@@ -127,6 +94,22 @@ class _ImagePickerPageState extends State<ImagePickerPage>
     } else {
       print("Error: ${response.statusCode}");
     }
+  }
+
+  void _addTag() {
+    String tag = _tagController.text.trim();
+    if (tag.isNotEmpty && !_tags.contains(tag)) {
+      setState(() {
+        _tags.add(tag);
+        _tagController.clear();
+      });
+    }
+  }
+
+  void _removeTag(String tag) {
+    setState(() {
+      _tags.remove(tag);
+    });
   }
 
   @override
@@ -142,28 +125,111 @@ class _ImagePickerPageState extends State<ImagePickerPage>
             Tab(text: 'Predictions'),
           ],
         )
-            : null, // Don't show tabs if no prediction data
+            : null,
       ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
               child: _image == null
-                  ? SizedBox(
-                  height: 200,
-                  child: Center(child: Text("No image selected.")))
-                  : ImageDisplay(imageFile: _image!),
+                  ? Container(
+                height: 200,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: Center(child: Text("No image selected.")),
+              )
+                  : ClipRRect(
+                borderRadius: BorderRadius.circular(8.0),
+                child: Image.file(
+                  _image!,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Text('Could not load image.');
+                  },
+                ),
+              ),
             ),
+            Wrap(
+              spacing: 8.0,
+              runSpacing: 4.0,
+              children: _tags
+                  .map((tag) => Chip(
+                label: Text(tag),
+                onDeleted: () => _removeTag(tag),
+              ))
+                  .toList(),
+            ),
+            TextField(
+              controller: _tagController,
+              decoration: InputDecoration(
+                labelText: 'Add tags (location, context)',
+                suffixIcon: IconButton(
+                  icon: Icon(Icons.add),
+                  onPressed: _addTag,
+                ),
+              ),
+              onSubmitted: (_) => _addTag(),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () => _pickImage(ImageSource.gallery),
+                    icon: Icon(Icons.photo_library, color: Colors.white),
+                    label: Text("Gallery", style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _pickImage(ImageSource.camera),
+                    icon: Icon(Icons.camera_alt, color: Colors.white),
+                    label: Text("Camera", style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_image != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 16.0),
+                child: ElevatedButton.icon(
+                    onPressed: _classifyImage,
+                    icon: Icon(Icons.send, color: Colors.white), // Added Icon
+                    label: Text("Send", style: TextStyle(color: Colors.white)), //Added style
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent, // Change color as needed
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+
+                ),
+                ),
+              ),
             if (_predictionData != null)
               SizedBox(
-                height: 300, // Adjust height as needed for the TabBarView
+                height: 300,
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    // Tab 1: Simple Caption (assuming your server returns a "caption" field)
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Text(
@@ -171,7 +237,6 @@ class _ImagePickerPageState extends State<ImagePickerPage>
                         style: TextStyle(fontSize: 16),
                       ),
                     ),
-                    // Tab 2: List of Predictions
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: _predictionData?["predictions"] != null &&
@@ -203,23 +268,8 @@ class _ImagePickerPageState extends State<ImagePickerPage>
                   ],
                 ),
               ),
-            SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () {
-                _pickImage(ImageSource.gallery);
-              },
-              child: Text("Pick from Gallery"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                _pickImage(ImageSource.camera);
-              },
-              child: Text("Pick from Camera"),
-            ),
-            SizedBox(height: 20), // Add some spacing at the bottom
           ],
         ),
       ),
     );
-  }
-}
+  }}
