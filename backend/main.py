@@ -44,13 +44,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Load the pre-trained ResNet-18 model
 model = models.resnet50(pretrained=True)
 model.eval()  # Set the model to evaluation mode
 
-genai.configure(api_key="xxxxxxxx")  # Replace with your actual API key
+genai.configure(api_key="xxxx")  # Replace with your actual API key
 
 # Use the Gemini Pro model (text-only)
 model_txt = genai.GenerativeModel('gemini-2.0-flash')
@@ -106,10 +105,7 @@ async def predict(file: UploadFile = File(...) , tags: str = Form(...)):
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
-@app.get("/")
-async def read_root():
-    return Response(open("./static/index.html", "r").read(), media_type="text/html")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8099)
+    uvicorn.run(app, host="0.0.0.0", port=8099)

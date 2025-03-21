@@ -1,0 +1,86 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f4f4;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+}
+
+#fileInput {
+    display: block;
+    margin: 20px auto;
+}
+
+#predictButton {
+    display: block;
+    margin: 20px auto;
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#results {
+    margin-top: 20px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: white;
+}
+
+.tag-container {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.tag {
+    background-color: #e0e0e0;
+    padding: 5px 10px;
+    margin: 5px;
+    border-radius: 15px;
+    cursor: pointer; /* Change cursor to pointer */
+}
+
+#tagInput {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.prediction-container {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    justify-content: center; /* Center the tags */
+}
+
+.prediction-tag {
+    background-color: #b0e0e6;
+    padding: 5px 10px;
+    margin: 5px;
+    border-radius: 15px;
+    font-weight: bold;
+    color: #333;
+}
+
+#uploadedImage {
+    display: block;
+    margin: 20px auto;
+    max-width: 600px;
+    max-height: 600px;
+}
+
+@media (max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+}
